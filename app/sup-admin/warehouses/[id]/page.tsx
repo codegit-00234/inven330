@@ -74,6 +74,7 @@ import {
 import fetchData from "@/hooks/fetch-data"
 import { formatCurrency } from "@/lib/utils"
 import fetchWareHouseData from "@/hooks/fetch-invidual-data"
+import axios from "axios"
 
 // Sample financial data
 
@@ -115,6 +116,24 @@ export default function WarehouseDetailsPage() {
   
   // Fetch warehouse data using the ID from params
   const { data: warehouseData, loading, error } = fetchWareHouseData(`/api/warehouse/list`,{id:wareHouseId})
+  const [dashboard, setDashboard] = useState<any>(null)
+  const [dashboardLoading, setDashboardLoading] = useState(true)
+  const [dashboardError, setDashboardError] = useState(null)
+
+  useEffect(() => {
+    async function fetchDashboard() {
+      setDashboardLoading(true)
+      try {
+        const res = await axios.post("/api/warehouse/dashboard", { warehouseId: wareHouseId })
+        setDashboard(res.data)
+      } catch (err: any) {
+        setDashboardError(err)
+      } finally {
+        setDashboardLoading(false)
+      }
+    }
+    if (wareHouseId) fetchDashboard()
+  }, [wareHouseId])
 
   // Loading state
   if (loading) {
@@ -151,6 +170,17 @@ export default function WarehouseDetailsPage() {
             </div>
           </div>
        </>
+    )
+  }
+
+  if (dashboardLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <div className="text-center">
+          <Activity className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-muted-foreground">Loading analytics...</p>
+        </div>
+      </div>
     )
   }
 
@@ -238,59 +268,51 @@ export default function WarehouseDetailsPage() {
             </div>
           </div>
 
-          {/* Warehouse Stats Cards */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-                <Package className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{warehouseData.stats?.totalProducts || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  Active inventory items
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(warehouseData.stats?.totalSales)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Total sales amount
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{warehouseData.stats?.totalOrders || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  Completed transactions
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Assigned Users</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{warehouseData.stats?.assignedUsers || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  Active warehouse staff
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Analytics Cards */}
+          {dashboard && (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+                  <Package className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboard.metrics.totalProducts}</div>
+                  <p className="text-xs text-muted-foreground">Active inventory items</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatCurrency(dashboard.metrics.totalRevenue)}</div>
+                  <p className="text-xs text-muted-foreground">Total sales revenue</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+                  <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboard.metrics.totalSales}</div>
+                  <p className="text-xs text-muted-foreground">Completed transactions</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Assigned Users</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{dashboard.metrics.totalUsers}</div>
+                  <p className="text-xs text-muted-foreground">Active warehouse staff</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Warehouse Details */}
           <Card>
@@ -335,6 +357,7 @@ export default function WarehouseDetailsPage() {
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="products">Products</TabsTrigger>
               <TabsTrigger value="sales">Recent Sales</TabsTrigger>
+              <TabsTrigger value="top">Top Products</TabsTrigger>
               <TabsTrigger value="users">Assigned Users</TabsTrigger>
             </TabsList>
 
@@ -342,24 +365,57 @@ export default function WarehouseDetailsPage() {
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                 <Card className="col-span-4">
                   <CardHeader>
-                    <CardTitle>Financial Overview</CardTitle>
+                    <CardTitle>Monthly Sales</CardTitle>
                   </CardHeader>
                   <CardContent className="pl-2">
                     <ResponsiveContainer width="100%" height={350}>
-                      <LineChart data={monthlyData}>
+                      <BarChart data={dashboard.salesByMonth}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" />
                         <YAxis />
                         <Tooltip />
-                        <Line type="monotone" dataKey="sales" stroke="#2563eb" strokeWidth={2} />
-                        <Line type="monotone" dataKey="purchases" stroke="#dc2626" strokeWidth={2} />
-                        <Line type="monotone" dataKey="profit" stroke="#16a34a" strokeWidth={2} />
-                      </LineChart>
+                        <Bar dataKey="revenue" fill="#2563eb" />
+                      </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
-               
               </div>
+            </TabsContent>
+
+            <TabsContent value="top" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top Performing Products</CardTitle>
+                  <CardDescription>Top 5 products by sales revenue</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {dashboard.topProducts && dashboard.topProducts.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Product Name</TableHead>
+                          <TableHead>Units Sold</TableHead>
+                          <TableHead>Revenue</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dashboard.topProducts.map((product: any) => (
+                          <TableRow key={product.productId}>
+                            <TableCell>{product.name}</TableCell>
+                            <TableCell>{product.sales}</TableCell>
+                            <TableCell>{formatCurrency(product.revenue)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="text-center py-8">
+                      <BarChart3 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <h3 className="text-lg font-medium mb-2">No Top Products Data</h3>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="products" className="space-y-4">
