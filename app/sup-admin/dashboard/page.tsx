@@ -10,13 +10,14 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Package, ShoppingCart, Users, DollarSign, Warehouse } from "lucide-react"
+import { Package, ShoppingCart, Users, DollarSign, Warehouse, TrendingUp, Eye, MapPin } from "lucide-react"
 import { DashboardCard } from "./components/DashboardCard"
 import { RecentSalesTable } from "./components/RecentSalesTable"
 import { UserTable } from "./components/UserTable"
 import { QuickActions } from './components/QuickActions'
 import { SystemOverview } from './components/SystemOverview'
 import { formatCurrency } from '@/lib/utils'
+import Link from 'next/link'
 
 interface DashboardStats {
   totalUsers: number
@@ -35,29 +36,67 @@ interface DashboardStats {
   }>
 }
 
+interface WarehouseAnalytics {
+  id: string
+  warehouseCode: string
+  name: string
+  address: string
+  phoneNumber: string
+  email: string
+  analytics: {
+    totalSales: number
+    totalOrders: number
+    totalProducts: number
+    totalUsers: number
+    totalCustomers: number
+    lowStockProducts: number
+    avgOrderValue: number
+  }
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [warehouseAnalytics, setWarehouseAnalytics] = useState<{
+    warehouses: WarehouseAnalytics[]
+    summary: {
+      totalWarehouses: number
+      totalRevenue: number
+      totalOrders: number
+      totalProducts: number
+      topPerformer: WarehouseAnalytics | null
+    }
+  } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchDashboardStats = async () => {
+    const fetchDashboardData = async () => {
       try {
-        const response = await fetch('/api/dashboard/stats')
-        if (!response.ok) {
-          throw new Error('Failed to fetch dashboard statistics')
+        const [statsResponse, analyticsResponse] = await Promise.all([
+          fetch('/api/dashboard/stats'),
+          fetch('/api/warehouse/analytics')
+        ])
+
+        if (!statsResponse.ok || !analyticsResponse.ok) {
+          throw new Error('Failed to fetch dashboard data')
         }
-        const data = await response.json()
-        setStats(data)
+
+        const [statsData, analyticsData] = await Promise.all([
+          statsResponse.json(),
+          analyticsResponse.json()
+        ])
+
+        setStats(statsData)
+        setWarehouseAnalytics(analyticsData)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred')
-        console.error('Dashboard stats error:', err)
+        console.error('Dashboard error:', err)
       } finally {
         setLoading(false)
       }
     }
 
-    fetchDashboardStats()
+    fetchDashboardData()
   }, [])
 
   if (loading) {
@@ -135,6 +174,146 @@ export default function DashboardPage() {
               icon={DollarSign}
             />
           </div>
+
+          {/* Warehouse Analytics Section */}
+          {warehouseAnalytics && (
+            <>
+              {/* Top Performer Card */}
+              {warehouseAnalytics.summary.topPerformer && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-green-600" />
+                      Top Performing Warehouse
+                    </CardTitle>
+                    <CardDescription>
+                      Warehouse with highest sales revenue
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-lg">
+                          <Warehouse className="h-6 w-6 text-green-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-green-600">
+                            {warehouseAnalytics.summary.topPerformer.name}
+                          </h3>
+                          <p className="text-sm text-muted-foreground font-mono">
+                            {warehouseAnalytics.summary.topPerformer.warehouseCode}
+                          </p>
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <MapPin className="h-3 w-3" />
+                            <span>{warehouseAnalytics.summary.topPerformer.address.split(',')[0]}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-green-600">
+                          {formatCurrency(warehouseAnalytics.summary.topPerformer.analytics.totalSales)}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {warehouseAnalytics.summary.topPerformer.analytics.totalOrders} orders
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Avg: {formatCurrency(warehouseAnalytics.summary.topPerformer.analytics.avgOrderValue)}
+                        </p>
+                      </div>
+                      <Button asChild size="sm">
+                        <Link href={`/sup-admin/warehouses/${warehouseAnalytics.summary.topPerformer.warehouseCode}`}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Details
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Warehouse Performance Table */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Warehouse Performance</CardTitle>
+                  <CardDescription>
+                    Sales performance and analytics for all warehouses
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Warehouse</TableHead>
+                        <TableHead>Location</TableHead>
+                        <TableHead className="text-right">Total Sales</TableHead>
+                        <TableHead className="text-right">Orders</TableHead>
+                        <TableHead className="text-right">Products</TableHead>
+                        <TableHead className="text-right">Users</TableHead>
+                        <TableHead className="text-right">Avg Order</TableHead>
+                        <TableHead className="text-right">Stock Alerts</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {warehouseAnalytics.warehouses.map((warehouse, index) => (
+                        <TableRow key={warehouse.id}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{warehouse.name}</div>
+                              <div className="text-sm text-muted-foreground font-mono">
+                                {warehouse.warehouseCode}
+                              </div>
+                              {index === 0 && (
+                                <Badge variant="default" className="bg-green-600 text-xs mt-1">
+                                  Top Performer
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {warehouse.address.split(',')[0]}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {formatCurrency(warehouse.analytics.totalSales)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {warehouse.analytics.totalOrders}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {warehouse.analytics.totalProducts}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {warehouse.analytics.totalUsers}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(warehouse.analytics.avgOrderValue)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {warehouse.analytics.lowStockProducts > 0 ? (
+                              <Badge variant="destructive">
+                                {warehouse.analytics.lowStockProducts}
+                              </Badge>
+                            ) : (
+                              <span className="text-green-600">Good</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button asChild variant="outline" size="sm">
+                              <Link href={`/sup-admin/warehouses/${warehouse.warehouseCode}`}>
+                                <Eye className="h-4 w-4" />
+                              </Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </>
+          )}
 
           {/* Main Content Grid */}
           <div className="grid gap-4 lg:grid-cols-7">

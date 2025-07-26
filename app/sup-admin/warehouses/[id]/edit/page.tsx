@@ -189,7 +189,7 @@ export default function EditWarehousePage() {
 
   const handleCloseSuccessDialog = () => {
     setShowSuccessDialog(false)
-    router.push(`/warehouses/${params.id}`)
+    router.push(`/sup-admin/warehouses/${wareHouseId}`)
   }
 
   if (loading) {
@@ -209,7 +209,7 @@ export default function EditWarehousePage() {
             <div className="text-center">
               <h2 className="text-2xl font-bold mb-2">Warehouse Not Found</h2>
               <p className="text-muted-foreground mb-4">The requested warehouse could not be found.</p>
-              <Button onClick={() => router.push("/warehouses/list")}>
+              <Button onClick={() => router.push("/sup-admin/warehouses/list")}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Warehouses
               </Button>
@@ -233,15 +233,15 @@ export default function EditWarehousePage() {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbLink href="/dashboard">Home</BreadcrumbLink>
+                  <BreadcrumbLink href="/sup-admin/dashboard">Home</BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbLink href="/warehouses/list">Warehouses</BreadcrumbLink>
+                  <BreadcrumbLink href="/sup-admin/warehouses/list">Warehouses</BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbLink href={`/warehouses/${params.id}`}>{warehouseData.name}</BreadcrumbLink>
+                  <BreadcrumbLink href={`/sup-admin/warehouses/${wareHouseId}`}>{warehouseData?.name}</BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
@@ -260,7 +260,7 @@ export default function EditWarehousePage() {
               <h1 className="text-3xl font-bold text-blue-600">Edit Warehouse</h1>
               <Badge variant="outline">{warehouseData.warehouseCode}</Badge>
             </div>
-            <Button variant="outline" onClick={() => router.push(`/warehouses/${params.id}`)}>
+            <Button variant="outline" onClick={() => router.push(`/sup-admin/warehouses/${wareHouseId}`)}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Details
             </Button>
@@ -407,7 +407,7 @@ export default function EditWarehousePage() {
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-4">
-            <Button variant="outline" onClick={() => router.push(`/warehouses/${params.id}`)}>
+            <Button variant="outline" onClick={() => router.push(`/sup-admin/warehouses/${wareHouseId}`)}>
               Cancel
             </Button>
             <Button onClick={handleSaveChanges} disabled={!hasChanges() || isSubmitting} className="min-w-[140px]">
@@ -440,7 +440,7 @@ export default function EditWarehousePage() {
               <Button onClick={handleCloseSuccessDialog} className="w-full">
                 View Warehouse Details
               </Button>
-              <Button variant="outline" onClick={() => router.push("/warehouses/list")} className="w-full">
+              <Button variant="outline" onClick={() => router.push("/sup-admin/warehouses/list")} className="w-full">
                 Back to Warehouses List
               </Button>
             </div>

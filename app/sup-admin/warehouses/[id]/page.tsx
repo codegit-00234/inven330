@@ -21,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Progress } from "@/components/ui/progress"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +58,11 @@ import {
   Activity,
   ArrowLeft,
   AlertCircle,
+  AlertTriangle,
+  Crown,
+  Calendar,
+  Target,
+  Star
 } from "lucide-react"
 import {
   LineChart,
@@ -66,55 +72,59 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Pie,
   BarChart,
   Bar,
+  PieChart,
+  Pie,
   Cell
 } from "recharts"
 import fetchData from "@/hooks/fetch-data"
 import { formatCurrency } from "@/lib/utils"
 import fetchWareHouseData from "@/hooks/fetch-invidual-data"
+import Link from "next/link"
 
-// Sample financial data
-
-// Sample monthly data for charts
-const monthlyData = [
-  { month: "Jan", sales: 12500, purchases: 8900, profit: 3600 },
-  { month: "Feb", sales: 15200, purchases: 10200, profit: 5000 },
-  { month: "Mar", sales: 18700, purchases: 12800, profit: 5900 },
-  { month: "Apr", sales: 16300, purchases: 11500, profit: 4800 },
-  { month: "May", sales: 21400, purchases: 14200, profit: 7200 },
-  { month: "Jun", sales: 19800, purchases: 13100, profit: 6700 },
-]
-
-// Sample category data for pie chart
-const categoryData = [
-  { name: "Electronics", value: 45, color: "#0088FE" },
-  { name: "Computers", value: 30, color: "#00C49F" },
-  { name: "Audio", value: 15, color: "#FFBB28" },
-  { name: "Tablets", value: 10, color: "#FF8042" },
-]
-
-// Sample recent transactions
-
-
-// Sample available users to add
-const availableUsers = [
-  { id: "USR-004", name: "Sarah Admin", role: "admin", email: "sarah@inventorypro.com" },
-  { id: "USR-005", name: "Tom Worker", role: "staff", email: "tom@inventorypro.com" },
-  { id: "USR-006", name: "Lisa Supervisor", role: "manager", email: "lisa@inventorypro.com" },
-]
+// Color palette for charts
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
 export default function WarehouseDetailsPage() {
   const router = useRouter()
   const path = usePathname()
-  const [selectedPeriod, setSelectedPeriod] = useState("6months")
-  const [isAddUserOpen, setIsAddUserOpen] = useState(false)
-  const [selectedUser, setSelectedUser] = useState("")
+  const [selectedPeriod, setSelectedPeriod] = useState("12months")
+  const [detailedAnalytics, setDetailedAnalytics] = useState<any>(null)
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false)
   const wareHouseId = path?.split("/")[3]
   
   // Fetch warehouse data using the ID from params
   const { data: warehouseData, loading, error } = fetchWareHouseData(`/api/warehouse/list`,{id:wareHouseId})
+
+  // Fetch detailed analytics
+  useEffect(() => {
+    const fetchDetailedAnalytics = async () => {
+      if (!wareHouseId) return
+      
+      setIsLoadingAnalytics(true)
+      try {
+        const response = await fetch('/api/warehouse/analytics', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ warehouseId: wareHouseId })
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          setDetailedAnalytics(data)
+        }
+      } catch (error) {
+        console.error('Error fetching detailed analytics:', error)
+      } finally {
+        setIsLoadingAnalytics(false)
+      }
+    }
+
+    fetchDetailedAnalytics()
+  }, [wareHouseId])
 
   // Loading state
   if (loading) {
@@ -175,6 +185,12 @@ export default function WarehouseDetailsPage() {
     }
   }
 
+  const getStockStatus = (quantity: number) => {
+    if (quantity <= 5) return { status: 'Critical', color: 'text-red-600', bg: 'bg-red-100' }
+    if (quantity <= 10) return { status: 'Low', color: 'text-yellow-600', bg: 'bg-yellow-100' }
+    return { status: 'Good', color: 'text-green-600', bg: 'bg-green-100' }
+  }
+
  
   return (
     <>
@@ -231,9 +247,11 @@ export default function WarehouseDetailsPage() {
                 <ArrowLeft className="h-4 w-4" />
                 Back to List
               </Button>
-              <Button className="gap-2">
-                <Edit className="h-4 w-4" />
-                Edit Warehouse
+              <Button asChild className="gap-2">
+                <Link href={`/sup-admin/warehouses/${wareHouseId}/edit`}>
+                  <Edit className="h-4 w-4" />
+                  Edit Warehouse
+                </Link>
               </Button>
             </div>
           </div>
@@ -292,6 +310,23 @@ export default function WarehouseDetailsPage() {
             </Card>
           </div>
 
+          {/* Low Stock Alert */}
+          {detailedAnalytics?.lowStockProducts && detailedAnalytics.lowStockProducts.length > 0 && (
+            <Card className="border-yellow-200 bg-yellow-50">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-2 text-yellow-800">
+                  <AlertTriangle className="h-5 w-5" />
+                  <div>
+                    <p className="font-medium">Low Stock Alert</p>
+                    <p className="text-sm">
+                      {detailedAnalytics.lowStockProducts.length} products are running low on stock
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Warehouse Details */}
           <Card>
             <CardHeader>
@@ -330,39 +365,159 @@ export default function WarehouseDetailsPage() {
             </CardContent>
           </Card>
 
-          <Tabs defaultValue="overview" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
+          <Tabs defaultValue="analytics" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-6">
+              <TabsTrigger value="analytics">Analytics</TabsTrigger>
               <TabsTrigger value="products">Products</TabsTrigger>
-              <TabsTrigger value="sales">Recent Sales</TabsTrigger>
-              <TabsTrigger value="users">Assigned Users</TabsTrigger>
+              <TabsTrigger value="sales">Sales</TabsTrigger>
+              <TabsTrigger value="customers">Customers</TabsTrigger>
+              <TabsTrigger value="users">Users</TabsTrigger>
+              <TabsTrigger value="reports">Reports</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="overview" className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <Card className="col-span-4">
-                  <CardHeader>
-                    <CardTitle>Financial Overview</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pl-2">
-                    <ResponsiveContainer width="100%" height={350}>
-                      <LineChart data={monthlyData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" />
-                        <YAxis />
-                        <Tooltip />
-                        <Line type="monotone" dataKey="sales" stroke="#2563eb" strokeWidth={2} />
-                        <Line type="monotone" dataKey="purchases" stroke="#dc2626" strokeWidth={2} />
-                        <Line type="monotone" dataKey="profit" stroke="#16a34a" strokeWidth={2} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-               
-              </div>
+            <TabsContent value="analytics" className="space-y-4">
+              {isLoadingAnalytics ? (
+                <div className="flex items-center justify-center py-8">
+                  <Activity className="h-6 w-6 animate-spin mr-2" />
+                  Loading analytics...
+                </div>
+              ) : detailedAnalytics ? (
+                <>
+                  {/* Monthly Sales Chart */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <BarChart3 className="h-5 w-5" />
+                        Monthly Sales Performance
+                      </CardTitle>
+                      <CardDescription>
+                        Revenue and order trends over the last 12 months
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={350}>
+                        <BarChart data={detailedAnalytics.monthlySalesData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <Tooltip 
+                            formatter={(value, name) => [
+                              name === 'revenue' ? formatCurrency(value as number) : value,
+                              name === 'revenue' ? 'Revenue' : 'Orders'
+                            ]}
+                          />
+                          <Bar dataKey="revenue" fill="#3b82f6" name="revenue" />
+                          <Bar dataKey="orders" fill="#10b981" name="orders" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  {/* Top Products and Top Customers */}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Star className="h-5 w-5" />
+                          Top Selling Products
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {detailedAnalytics.topProducts.slice(0, 5).map((product: any, index: number) => (
+                            <div key={product.productId} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium">
+                                  {index + 1}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-sm">{product.productName}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {product.totalQuantity} units sold
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-medium">{formatCurrency(product.totalRevenue)}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Crown className="h-5 w-5" />
+                          Top Customers
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {detailedAnalytics.topCustomers.slice(0, 5).map((customer: any, index: number) => (
+                            <div key={customer.customerId} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center text-xs font-medium">
+                                  {index + 1}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-sm">{customer.customerName}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {customer.totalOrders} orders
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-medium">{formatCurrency(customer.totalSpent)}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No analytics data available</p>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="products" className="space-y-4">
+              {/* Stock Overview Cards */}
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Total Products</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{warehouseData.products?.length || 0}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Low Stock Items</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-yellow-600">
+                      {warehouseData.products?.filter((p: any) => p.quantity <= 10).length || 0}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Out of Stock</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-red-600">
+                      {warehouseData.products?.filter((p: any) => p.quantity === 0).length || 0}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
               <Card>
                 <CardHeader>
                   <CardTitle>Product Inventory</CardTitle>
@@ -377,8 +532,8 @@ export default function WarehouseDetailsPage() {
                         <TableRow>
                           <TableHead>Product Name</TableHead>
                           <TableHead>Barcode</TableHead>
-                          
-                          <TableHead>Stock</TableHead>
+                          <TableHead>Stock Status</TableHead>
+                          <TableHead>Stock Level</TableHead>
                           <TableHead>Unit</TableHead>
                           <TableHead>Cost</TableHead>
                           <TableHead>Wholesale Price</TableHead>
@@ -386,18 +541,35 @@ export default function WarehouseDetailsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {warehouseData.products.map((product: any) => (
-                          <TableRow key={product.id}>
-                            <TableCell className="font-medium">{product.name}</TableCell>
-                            <TableCell>{product.barcode}</TableCell>
-                            
-                            <TableCell>{product.quantity < 20 ? <div className="text-red-500">{product.quantity}</div>:<div className="text-green-500">{product.quantity}</div>}</TableCell>
-                            <TableCell>{product.unit}</TableCell>
-                            <TableCell>{product.cost}</TableCell>
-                            <TableCell>{formatCurrency(product.wholeSalePrice)}</TableCell>
-                            <TableCell>{formatCurrency(product.retailPrice)}</TableCell>
-                          </TableRow>
-                        ))}
+                        {warehouseData.products.map((product: any) => {
+                          const stockStatus = getStockStatus(product.quantity)
+                          return (
+                            <TableRow key={product.id}>
+                              <TableCell className="font-medium">{product.name}</TableCell>
+                              <TableCell className="font-mono">{product.barcode}</TableCell>
+                              <TableCell>
+                                <Badge className={`${stockStatus.bg} ${stockStatus.color}`}>
+                                  {stockStatus.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <span className={product.quantity <= 10 ? "text-red-500 font-medium" : "text-green-500"}>
+                                    {product.quantity}
+                                  </span>
+                                  <Progress 
+                                    value={Math.min((product.quantity / 50) * 100, 100)} 
+                                    className="w-16 h-2"
+                                  />
+                                </div>
+                              </TableCell>
+                              <TableCell>{product.unit}</TableCell>
+                              <TableCell>{formatCurrency(product.cost)}</TableCell>
+                              <TableCell>{formatCurrency(product.wholeSalePrice)}</TableCell>
+                              <TableCell>{formatCurrency(product.retailPrice)}</TableCell>
+                            </TableRow>
+                          )
+                        })}
                       </TableBody>
                     </Table>
                   ) : (
@@ -436,7 +608,7 @@ export default function WarehouseDetailsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {warehouseData.sale.slice(0, 10).map((sale: any) => (
+                        {warehouseData.sale.slice(0, 20).map((sale: any) => (
                           <TableRow key={sale.id}>
                             <TableCell className="font-medium">{sale.invoiceNo}</TableCell>
                             <TableCell>
@@ -481,6 +653,64 @@ export default function WarehouseDetailsPage() {
               </Card>
             </TabsContent>
 
+            <TabsContent value="customers" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Customer Analytics</CardTitle>
+                  <CardDescription>
+                    Customer insights and purchasing patterns
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {detailedAnalytics?.topCustomers && detailedAnalytics.topCustomers.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Customer Name</TableHead>
+                          <TableHead className="text-right">Total Spent</TableHead>
+                          <TableHead className="text-right">Orders</TableHead>
+                          <TableHead className="text-right">Avg Order</TableHead>
+                          <TableHead>Last Purchase</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {detailedAnalytics.topCustomers.map((customer: any, index: number) => (
+                          <TableRow key={customer.customerId}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {index < 3 && (
+                                  <Crown className="h-4 w-4 text-yellow-500" />
+                                )}
+                                <span className="font-medium">{customer.customerName}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatCurrency(customer.totalSpent)}
+                            </TableCell>
+                            <TableCell className="text-right">{customer.totalOrders}</TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(customer.totalSpent / customer.totalOrders)}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(customer.lastPurchase).toLocaleDateString()}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <h3 className="text-lg font-medium mb-2">No Customer Data</h3>
+                      <p className="text-muted-foreground">
+                        Customer analytics will appear here once sales are recorded.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
             <TabsContent value="users" className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -489,47 +719,6 @@ export default function WarehouseDetailsPage() {
                     Users who have access to this warehouse
                   </p>
                 </div>
-                <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="gap-2">
-                      <UserPlus className="h-4 w-4" />
-                      Add User
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Add User to Warehouse</DialogTitle>
-                      <DialogDescription>
-                        Select a user to assign to this warehouse. They will gain access to manage inventory here.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="user-select">Select User</Label>
-                        <Select value={selectedUser} onValueChange={setSelectedUser}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Choose a user to add" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableUsers.map((user) => (
-                              <SelectItem key={user.id} value={user.id}>
-                                {user.name} ({user.role}) - {user.email}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsAddUserOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={() => setIsAddUserOpen(false)} disabled={!selectedUser}>
-                        Add User
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
               </div>
 
               <Card>
@@ -615,6 +804,64 @@ export default function WarehouseDetailsPage() {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="reports" className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Performance Summary</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between">
+                      <span>Total Revenue</span>
+                      <span className="font-medium">{formatCurrency(warehouseData.stats?.totalSales || 0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total Orders</span>
+                      <span className="font-medium">{warehouseData.stats?.totalOrders || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Average Order Value</span>
+                      <span className="font-medium">
+                        {formatCurrency((warehouseData.stats?.totalSales || 0) / (warehouseData.stats?.totalOrders || 1))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Products in Stock</span>
+                      <span className="font-medium">{warehouseData.stats?.totalProducts || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Staff Members</span>
+                      <span className="font-medium">{warehouseData.stats?.assignedUsers || 0}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Quick Actions</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <Button variant="outline" className="w-full justify-start">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Generate Monthly Report
+                    </Button>
+                    <Button variant="outline" className="w-full justify-start">
+                      <Package className="mr-2 h-4 w-4" />
+                      Export Inventory
+                    </Button>
+                    <Button variant="outline" className="w-full justify-start">
+                      <ShoppingCart className="mr-2 h-4 w-4" />
+                      Export Sales Data
+                    </Button>
+                    <Button variant="outline" className="w-full justify-start">
+                      <Users className="mr-2 h-4 w-4" />
+                      User Activity Report
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
           </Tabs>
         </div>
