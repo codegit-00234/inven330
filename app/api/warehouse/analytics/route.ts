@@ -129,12 +129,14 @@ export async function POST(req: NextRequest) {
                 Product_online: true
               }
             },
-            Customer_online: true
+            Customer_online: true,
+            paymentMethod: true
           },
           orderBy: { createdAt: 'desc' }
         },
         products: {
-          where: { isDeleted: false }
+          where: { isDeleted: false },
+          orderBy: { quantity: 'asc' }
         },
         users: {
           where: { isDeleted: false }
@@ -158,12 +160,16 @@ export async function POST(req: NextRequest) {
     const totalProducts = warehouse.products.length;
     const totalUsers = warehouse.users.length;
     const totalCustomers = warehouse.customer.length;
+    const totalPaid = warehouse.sale.reduce((sum, sale) => sum + (sale.paidAmount || 0), 0);
+    const totalBalance = warehouse.sale.reduce((sum, sale) => sum + (sale.balance || 0), 0);
 
     // Monthly sales data for last 12 months
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
 
     const monthlySalesData = [];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
     for (let i = 11; i >= 0; i--) {
       const date = new Date();
       date.setMonth(date.getMonth() - i);
@@ -177,16 +183,22 @@ export async function POST(req: NextRequest) {
 
       const monthRevenue = monthSales.reduce((sum, sale) => sum + (sale.grandTotal || 0), 0);
       const monthOrders = monthSales.length;
+      const monthProfit = monthSales.reduce((sum, sale) => {
+        const saleProfit = sale.saleItems.reduce((itemSum, item) => itemSum + ((item.selectedPrice - item.cost) * item.quantity), 0);
+        return sum + saleProfit;
+      }, 0);
 
       monthlySalesData.push({
-        month: date.toLocaleString('default', { month: 'short' }),
+        month: monthNames[date.getMonth()],
+        year: date.getFullYear(),
         revenue: monthRevenue,
         orders: monthOrders,
+        profit: monthProfit,
         avgOrder: monthOrders > 0 ? monthRevenue / monthOrders : 0
       });
     }
 
-    // Top selling products
+    // Top selling products with detailed analytics
     const productSales: any = {};
     warehouse.sale.forEach(sale => {
       sale.saleItems.forEach(item => {
@@ -196,25 +208,39 @@ export async function POST(req: NextRequest) {
             productName: item.productName,
             totalQuantity: 0,
             totalRevenue: 0,
-            timesOrdered: 0
+            totalProfit: 0,
+            timesOrdered: 0,
+            avgPrice: 0,
+            lastSold: sale.createdAt
           };
         }
         productSales[item.productId].totalQuantity += item.quantity;
         productSales[item.productId].totalRevenue += item.total;
+        productSales[item.productId].totalProfit += (item.selectedPrice - item.cost) * item.quantity;
         productSales[item.productId].timesOrdered += 1;
+        productSales[item.productId].avgPrice = productSales[item.productId].totalRevenue / productSales[item.productId].totalQuantity;
+        
+        if (new Date(sale.createdAt) > new Date(productSales[item.productId].lastSold)) {
+          productSales[item.productId].lastSold = sale.createdAt;
+        }
       });
     });
 
     const topProducts = Object.values(productSales)
       .sort((a: any, b: any) => b.totalRevenue - a.totalRevenue)
-      .slice(0, 10);
+      .slice(0, 15);
 
-    // Low stock alerts
+    // Low stock alerts with priority levels
     const lowStockProducts = warehouse.products
-      .filter(product => product.quantity <= 10)
+      .filter(product => product.quantity <= 20)
+      .map(product => ({
+        ...product,
+        priority: product.quantity === 0 ? 'critical' : product.quantity <= 5 ? 'high' : product.quantity <= 10 ? 'medium' : 'low',
+        daysOfStock: product.quantity // This could be enhanced with sales velocity calculation
+      }))
       .sort((a, b) => a.quantity - b.quantity);
 
-    // Customer analytics
+    // Customer analytics with segmentation
     const customerPurchases: any = {};
     warehouse.sale.forEach(sale => {
       if (sale.selectedCustomerId) {
@@ -222,22 +248,83 @@ export async function POST(req: NextRequest) {
           customerPurchases[sale.selectedCustomerId] = {
             customerId: sale.selectedCustomerId,
             customerName: sale.Customer_online?.name || 'Unknown',
+            customerType: sale.Customer_online?.type || 'individual',
             totalSpent: 0,
             totalOrders: 0,
-            lastPurchase: sale.createdAt
+            avgOrderValue: 0,
+            firstPurchase: sale.createdAt,
+            lastPurchase: sale.createdAt,
+            totalItems: 0
           };
         }
         customerPurchases[sale.selectedCustomerId].totalSpent += sale.grandTotal || 0;
         customerPurchases[sale.selectedCustomerId].totalOrders += 1;
+        customerPurchases[sale.selectedCustomerId].totalItems += sale.saleItems.length;
+        
         if (new Date(sale.createdAt) > new Date(customerPurchases[sale.selectedCustomerId].lastPurchase)) {
           customerPurchases[sale.selectedCustomerId].lastPurchase = sale.createdAt;
+        }
+        if (new Date(sale.createdAt) < new Date(customerPurchases[sale.selectedCustomerId].firstPurchase)) {
+          customerPurchases[sale.selectedCustomerId].firstPurchase = sale.createdAt;
         }
       }
     });
 
+    // Calculate average order values and customer segments
+    Object.values(customerPurchases).forEach((customer: any) => {
+      customer.avgOrderValue = customer.totalSpent / customer.totalOrders;
+      customer.customerLifetimeValue = customer.totalSpent;
+      customer.segment = customer.totalSpent > 50000 ? 'VIP' : customer.totalSpent > 20000 ? 'Premium' : customer.totalSpent > 5000 ? 'Regular' : 'New';
+    });
+
     const topCustomers = Object.values(customerPurchases)
       .sort((a: any, b: any) => b.totalSpent - a.totalSpent)
-      .slice(0, 10);
+      .slice(0, 15);
+
+    // Sales performance metrics
+    const performanceMetrics = {
+      conversionRate: totalCustomers > 0 ? (totalOrders / totalCustomers) * 100 : 0,
+      repeatCustomerRate: totalCustomers > 0 ? (Object.values(customerPurchases).filter((c: any) => c.totalOrders > 1).length / totalCustomers) * 100 : 0,
+      averageOrderValue: totalOrders > 0 ? totalSales / totalOrders : 0,
+      profitMargin: totalSales > 0 ? ((totalSales - warehouse.sale.reduce((sum, sale) => sum + sale.saleItems.reduce((itemSum, item) => itemSum + (item.cost * item.quantity), 0), 0)) / totalSales) * 100 : 0,
+      salesGrowth: monthlySalesData.length >= 2 ? ((monthlySalesData[monthlySalesData.length - 1].revenue - monthlySalesData[monthlySalesData.length - 2].revenue) / monthlySalesData[monthlySalesData.length - 2].revenue) * 100 : 0
+    };
+
+    // Payment method analytics
+    const paymentMethods: any = {};
+    warehouse.sale.forEach(sale => {
+      sale.paymentMethod.forEach(payment => {
+        if (!paymentMethods[payment.method]) {
+          paymentMethods[payment.method] = {
+            method: payment.method,
+            totalAmount: 0,
+            transactionCount: 0
+          };
+        }
+        paymentMethods[payment.method].totalAmount += payment.amount;
+        paymentMethods[payment.method].transactionCount += 1;
+      });
+    });
+
+    const paymentAnalytics = Object.values(paymentMethods)
+      .sort((a: any, b: any) => b.totalAmount - a.totalAmount);
+
+    // Inventory analytics
+    const inventoryAnalytics = {
+      totalValue: warehouse.products.reduce((sum, product) => sum + (product.retailPrice * product.quantity), 0),
+      lowStockValue: lowStockProducts.reduce((sum, product) => sum + (product.retailPrice * product.quantity), 0),
+      averageProductValue: warehouse.products.length > 0 ? warehouse.products.reduce((sum, product) => sum + product.retailPrice, 0) / warehouse.products.length : 0,
+      stockTurnover: totalSales > 0 ? totalSales / (warehouse.products.reduce((sum, product) => sum + (product.cost * product.quantity), 0) || 1) : 0
+    };
+
+    // User activity analytics
+    const userRoles = warehouse.users.reduce((acc: any, user) => {
+      if (!acc[user.role]) {
+        acc[user.role] = 0;
+      }
+      acc[user.role]++;
+      return acc;
+    }, {});
 
     return NextResponse.json({
       warehouse: {
@@ -248,6 +335,8 @@ export async function POST(req: NextRequest) {
           totalProducts,
           totalUsers,
           totalCustomers,
+          totalPaid,
+          totalBalance,
           avgOrderValue: totalOrders > 0 ? totalSales / totalOrders : 0,
           lowStockCount: lowStockProducts.length
         }
@@ -256,7 +345,17 @@ export async function POST(req: NextRequest) {
       topProducts,
       lowStockProducts,
       topCustomers,
-      recentSales: warehouse.sale.slice(0, 20)
+      performanceMetrics,
+      paymentAnalytics,
+      inventoryAnalytics,
+      userRoles,
+      recentSales: warehouse.sale.slice(0, 25),
+      salesTrends: {
+        dailyAverage: totalOrders > 0 ? totalSales / 30 : 0, // Assuming 30 days
+        weeklyTrend: monthlySalesData.slice(-4), // Last 4 weeks approximation
+        bestPerformingMonth: monthlySalesData.reduce((max, month) => month.revenue > max.revenue ? month : max, monthlySalesData[0] || {}),
+        worstPerformingMonth: monthlySalesData.reduce((min, month) => month.revenue < min.revenue ? month : min, monthlySalesData[0] || {})
+      }
     });
   } catch (error) {
     console.error('Error fetching warehouse detailed analytics:', error);
